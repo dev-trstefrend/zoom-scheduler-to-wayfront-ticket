@@ -45,7 +45,7 @@ app.post("/webhook/zoom", async (req, res) => {
     return res.json({ plainToken: payload.plainToken, encryptedToken: hash });
   }
 
-  if (event !== "scheduler.booking_created") {
+  if (event !== "scheduler.scheduled_event_created") {
     console.log("⏭️ Ignoring event:", event);
     return res.status(200).json({ received: true });
   }
@@ -53,21 +53,21 @@ app.post("/webhook/zoom", async (req, res) => {
   console.log("📅 Booking event! Processing...");
 
   const booking = payload?.object || payload || {};
-  const scheduleId = booking.schedule_id || booking.booking_page_id || booking.id || "";
-  const language = Object.entries(BOOKING_PAGES).find(([id]) => scheduleId.includes(id))?.[1] || "English";
+  const eventId = booking.event_id || "";
+  const language = Object.entries(BOOKING_PAGES).find(([id]) => eventId.includes(id))?.[1] || "English";
 
-  const attendee = booking.attendees?.[0] || booking.invitee || booking;
-  const email = attendee.email || booking.email || "";
-  const firstName = attendee.first_name || booking.first_name || "";
-  const lastName = attendee.last_name || booking.last_name || "";
-  const startTime = booking.start_time || booking.start || "";
+  const email = booking.invitee_email || "";
+  const firstName = booking.invitee_first_name || "";
+  const lastName = booking.invitee_last_name || "";
+  const startTime = booking.start_date_time || "";
+  const phone = (booking.questions_and_answers || []).find(q => q.question === "Phone Number")?.["answer"]?.[0] || "N/A";
 
   console.log(`👤 Attendee: ${firstName} ${lastName} <${email}>`);
   console.log(`🌐 Language: ${language}`);
 
   try {
     const subject = `Zoom Booking - ${language} - ${firstName} ${lastName}`;
-    const note = `Meeting scheduled: ${startTime}\nClient: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${attendee.phone || "N/A"}\nLanguage: ${language}`;
+    const note = `Meeting scheduled: ${startTime}\nClient: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nLanguage: ${language}`;
 
     console.log("🎫 Creating Wayfront ticket...");
     const response = await fetch("https://app.trusteefriend.com/api/tickets", {
