@@ -88,7 +88,7 @@ app.post("/webhook/zoom", async (req, res) => {
     if (affiliateEmail) {
       console.log(`🔍 Looking up Wayfront user for: ${affiliateEmail}`);
       const teamRes = await fetch(
-        `${WAYFRONT_BASE}/team?filters[email][$eq][]=${encodeURIComponent(affiliateEmail)}`,
+        `${WAYFRONT_BASE}/clients?filters[email][$eq][]=${encodeURIComponent(affiliateEmail)}`,
         { headers: wayfrontHeaders() }
       );
       const teamData = await teamRes.json();
