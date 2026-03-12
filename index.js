@@ -77,11 +77,14 @@ app.post("/webhook/zoom", async (req, res) => {
   const clientEmail = booking.invitee_email || "";
   const firstName = booking.invitee_first_name || "";
   const lastName = booking.invitee_last_name || "";
-  const startTime = booking.start_date_time || "";
-  const hostName = booking.host_name || "";
-  const meetingUrl = booking.meeting_join_url || HOST_PMI_LINKS[hostName] || "";
+  const scheduledEvent = booking.scheduled_event || {};
+  const startTime = scheduledEvent.start_date_time || "";
+  const meetingId = scheduledEvent.external_location?.meeting_id || "";
+  const meetingUrl = scheduledEvent.external_location?.meeting_join_url || "";
+  const hostName = scheduledEvent.attendees?.[0]?.display_name || "";
+  const timeZone = booking.time_zone || "America/Los_Angeles";
   console.log(`🔗 Meeting URL: ${meetingUrl} (host: ${hostName})`);
-  const meetingId = booking.meeting_id || "";
+  console.log(`📅 Start time: ${startTime} (tz: ${timeZone})`);
 
   const qas = booking.questions_and_answers || [];
   const phone = qas.find(q => q.question === "Phone Number")?.answer?.[0] || "N/A";
@@ -172,9 +175,9 @@ app.post("/webhook/zoom", async (req, res) => {
       let meetingTZ = "Pacific Time";
       try {
         const dt = new Date(startTime);
-        meetingDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "America/Los_Angeles" });
-        meetingTime = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" });
-        meetingTZ = "Pacific Time (PT)";
+        meetingDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: timeZone });
+        meetingTime = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timeZone });
+        meetingTZ = timeZone.replace("America/", "").replace("_", " ") + " Time";
       } catch {}
 
       const dateStr = meetingDate && !meetingDate.includes('Invalid') ? meetingDate : null;
@@ -184,6 +187,7 @@ app.post("/webhook/zoom", async (req, res) => {
       if (dateStr) message += `📅 Date: ${dateStr}\n`;
       if (timeStr) message += `🕐 Time: ${timeStr}\n`;
       if (linkStr) message += `🔗 Zoom Link: ${linkStr}\n`;
+      if (hostName) message += `\nYou'll be meeting with ${hostName}.\n`;
       message += `\nWe look forward to speaking soon!`;
 
       const msgRes = await fetch(`${WAYFRONT_BASE}/ticket_messages/${ticketNumber}`, {
