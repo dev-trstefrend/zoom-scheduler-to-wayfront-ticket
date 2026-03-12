@@ -1,0 +1,13 @@
+{
+  "name": "zoom-wayfront-webhook",
+  "version": "1.0.0",
+  "description": "Receives Zoom booking webhooks and creates/updates Wayfront tickets",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0"
+  }
+}
