@@ -1,133 +1,69 @@
-// ============================================================
-// wayfront.js — Search-first ticket upsert
-// Searches by agent affiliate email → updates if found, creates if not
-// ============================================================
+const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 
-const WAYFRONT_BASE_URL  = "https://api.wayfront.com/v1"; // ⚠️ confirm from your dashboard
-const WAYFRONT_API_KEY   = process.env.WAYFRONT_API_KEY;
-const WAYFRONT_WORKSPACE = process.env.WAYFRONT_WORKSPACE;
+const WAYFRONT_BASE = 'https://app.trusteefriend.com/api';
+const WAYFRONT_API_KEY = process.env.WAYFRONT_API_KEY;
 
-const headers = {
-  "Content-Type":  "application/json",
-  "Authorization": `Bearer ${WAYFRONT_API_KEY}`,
-  "X-Workspace":   WAYFRONT_WORKSPACE,
-};
-
-// Main entry point
-async function upsertWayfrontTicket(bookingData) {
-  const { agentEmail, client, meeting } = bookingData;
-
-  console.log(`🔍 Searching for ticket with agent email: ${agentEmail}`);
-  const existing = await findTicketByAgentEmail(agentEmail);
-
-  if (existing) {
-    console.log(`✅ Found ticket #${existing.id} — updating...`);
-    return await updateTicket(existing.id, { client, meeting });
-  } else {
-    console.log(`🆕 No existing ticket — creating new...`);
-    return await createTicket({ agentEmail, client, meeting });
-  }
-}
-
-// Search for existing ticket by agent affiliate email
-async function findTicketByAgentEmail(agentEmail) {
-  try {
-    // ⚠️ Confirm exact query param name from your Wayfront API docs
-    const url = `${WAYFRONT_BASE_URL}/tickets?agent_email=${encodeURIComponent(agentEmail)}`;
-    const response = await fetch(url, { method: "GET", headers });
-
-    if (!response.ok) {
-      console.error(`Search failed: ${response.status}`);
-      return null;
+async function findTicketByEmail(email) {
+  const res = await fetch(`${WAYFRONT_BASE}/tickets?search=${encodeURIComponent(email)}`, {
+    headers: {
+      'Authorization': `Bearer ${WAYFRONT_API_KEY}`,
+      'Content-Type': 'application/json'
     }
-
-    const data    = await response.json();
-    const tickets = Array.isArray(data) ? data : (data.data || data.items || []);
-
-    if (tickets.length === 0) return null;
-
-    // Return most recently created ticket
-    return tickets.sort(
-      (a, b) => new Date(b.created_at) - new Date(a.created_at)
-    )[0];
-
-  } catch (err) {
-    console.error("Search error:", err.message);
-    return null; // fail safe — fall through to create
-  }
-}
-
-// Update existing ticket
-async function updateTicket(ticketId, { client, meeting }) {
-  // ⚠️ Confirm PATCH vs PUT from your Wayfront API docs
-  const response = await fetch(`${WAYFRONT_BASE_URL}/tickets/${ticketId}`, {
-    method:  "PATCH",
-    headers,
-    body: JSON.stringify({
-      ...buildTicketBody({ client, meeting }),
-      note: `[Updated ${new Date().toLocaleString()}]\n${formatNotes(meeting, client)}`,
-    }),
   });
-
-  if (!response.ok) {
-    throw new Error(`Update failed: ${response.status} ${await response.text()}`);
-  }
-
-  return { action: "updated", ticket: await response.json() };
+  const data = await res.json();
+  console.log('🔍 Search response:', JSON.stringify(data).substring(0, 300));
+  const tickets = data.data || data.tickets || data || [];
+  return Array.isArray(tickets) ? tickets[0] : null;
 }
 
-// Create new ticket
-async function createTicket({ agentEmail, client, meeting }) {
-  // ⚠️ Confirm POST endpoint from your Wayfront API docs
-  const response = await fetch(`${WAYFRONT_BASE_URL}/tickets`, {
-    method:  "POST",
-    headers,
-    body: JSON.stringify({
-      ...buildTicketBody({ client, meeting }),
-      agent_email: agentEmail,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Create failed: ${response.status} ${await response.text()}`);
-  }
-
-  return { action: "created", ticket: await response.json() };
-}
-
-// Shared body builder
-function buildTicketBody({ client, meeting }) {
-  return {
-    subject:      `[${meeting.language}] Free Consultation — ${client.first_name} ${client.last_name}`,
-    notes:        formatNotes(meeting, client),
-    client_name:  `${client.first_name} ${client.last_name}`,
-    client_email: client.email,
-    client_phone: client.phone || "",
-    tags: [
-      meeting.language === "Spanish" ? "spanish" : "english",
-      "zoom-booking",
-      "free-consultation",
-    ],
-    custom_fields: {
-      zoom_link:    meeting.zoom_link,
-      meeting_time: meeting.start_time,
-      language:     meeting.language,
-      assigned_to:  meeting.host,
-      meeting_id:   meeting.meeting_id,
-    },
+async function createTicket(booking, language) {
+  const body = {
+    subject: `Zoom Booking - ${language} - ${booking.first_name} ${booking.last_name}`,
+    note: `Meeting scheduled: ${booking.start_time}\nClient: ${booking.first_name} ${booking.last_name}\nEmail: ${booking.email}\nPhone: ${booking.phone || 'N/A'}\nLanguage: ${language}`
   };
+
+  const res = await fetch(`${WAYFRONT_BASE}/tickets`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${WAYFRONT_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  console.log('🎫 Create ticket response:', JSON.stringify(data).substring(0, 300));
+  return data;
 }
 
-function formatNotes(meeting, client) {
-  return [
-    `📅 ${new Date(meeting.start_time).toLocaleString("en-US", { timeZone: "America/New_York" })}`,
-    `⏱  Duration: ${meeting.duration} mins`,
-    `🔗 Zoom: ${meeting.zoom_link}`,
-    `👤 Host: ${meeting.host}`,
-    `🌐 Language: ${meeting.language}`,
-    `📧 ${client.email}`,
-    `📞 ${client.phone || "No phone provided"}`,
-  ].join("\n");
+async function updateTicket(ticketId, booking, language) {
+  const body = {
+    note: `[UPDATE] Meeting scheduled: ${booking.start_time}\nClient: ${booking.first_name} ${booking.last_name}\nEmail: ${booking.email}\nLanguage: ${language}`
+  };
+
+  const res = await fetch(`${WAYFRONT_BASE}/tickets/${ticketId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${WAYFRONT_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  console.log('✏️ Update ticket response:', JSON.stringify(data).substring(0, 300));
+  return data;
 }
 
-module.exports = { upsertWayfrontTicket };
+async function upsertTicket(booking, language) {
+  const email = booking.email || booking.invitee_email;
+  console.log(`📧 Looking up ticket for email: ${email}`);
+  const existing = await findTicketByEmail(email);
+  if (existing) {
+    console.log(`📝 Updating existing ticket ${existing.id} for ${email}`);
+    return await updateTicket(existing.id, booking, language);
+  } else {
+    console.log(`🆕 Creating new ticket for ${email}`);
+    return await createTicket(booking, language);
+  }
+}
+
+module.exports = { upsertTicket };
