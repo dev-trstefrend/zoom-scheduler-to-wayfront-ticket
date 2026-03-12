@@ -114,6 +114,15 @@ app.post("/webhook/zoom", async (req, res) => {
         subject,
         note,
         user_id: userId,
+        form_data: {
+          "First Name": firstName,
+          "Last Name": lastName,
+          "Email": clientEmail,
+          "Phone": phone,
+          "Language": language,
+          "Meeting Date": startTime,
+          "Zoom Link": meetingUrl,
+        },
       }),
     });
     const createText = await createRes.text();
