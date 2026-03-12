@@ -16,6 +16,8 @@ const BOOKING_PAGES = {
   "8pakjwo3": "English",
 };
 
+const WAYFRONT_BASE = "https://app.trusteefriend.com/api";
+
 // Healthcheck
 app.get("/", (req, res) => res.json({ status: "ok" }));
 
@@ -28,7 +30,6 @@ app.get("/webhook/zoom", (req, res) => {
 // Main webhook
 app.post("/webhook/zoom", async (req, res) => {
   console.log("📨 Webhook received, event:", req.body?.event);
-  console.log("📦 Raw body:", JSON.stringify(req.body, null, 2));
 
   if (!verifyZoomSignature(req)) {
     console.error("❌ Invalid Zoom signature");
@@ -56,36 +57,52 @@ app.post("/webhook/zoom", async (req, res) => {
   const eventId = booking.event_id || "";
   const language = Object.entries(BOOKING_PAGES).find(([id]) => eventId.includes(id))?.[1] || "English";
 
-  const email = booking.invitee_email || "";
+  const clientEmail = booking.invitee_email || "";
   const firstName = booking.invitee_first_name || "";
   const lastName = booking.invitee_last_name || "";
   const startTime = booking.start_date_time || "";
+  const meetingUrl = booking.meeting_join_url || "";
   const phone = (booking.questions_and_answers || []).find(q => q.question === "Phone Number")?.["answer"]?.[0] || "N/A";
 
-  console.log(`👤 Attendee: ${firstName} ${lastName} <${email}>`);
+  console.log(`👤 Client: ${firstName} ${lastName} <${clientEmail}>`);
   console.log(`🌐 Language: ${language}`);
 
   try {
-    const subject = `Zoom Booking - ${language} - ${firstName} ${lastName}`;
-    const note = `Meeting scheduled: ${startTime}\nClient: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nLanguage: ${language}`;
-
-    console.log("🎫 Creating Wayfront ticket...");
-    const response = await fetch("https://app.trusteefriend.com/api/tickets", {
-      method: "POST",
+    // Search for existing ticket by client email in form_data
+    console.log(`🔍 Searching for ticket with client email: ${clientEmail}`);
+    const searchUrl = `${WAYFRONT_BASE}/tickets?filters[form_data.Email][$eq][]=${encodeURIComponent(clientEmail)}`;
+    const searchRes = await fetch(searchUrl, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${WAYFRONT_API_KEY}`,
-      },
-      body: JSON.stringify({ subject, note, user_id: 3101 }),
+      }
     });
+    const searchData = await searchRes.json();
+    console.log(`🔍 Search result: ${searchData?.data?.length || 0} tickets found`);
 
-    const text = await response.text();
-    console.log(`📬 Wayfront response ${response.status}:`, text);
+    const existingTicket = searchData?.data?.[0];
 
-    if (response.ok) {
-      console.log("✅ Ticket created successfully!");
+    const zoomNote = `📅 Zoom Meeting Booked!\nDate: ${startTime}\nClient: ${firstName} ${lastName}\nEmail: ${clientEmail}\nPhone: ${phone}\nLanguage: ${language}\nJoin URL: ${meetingUrl}`;
+
+    if (existingTicket) {
+      console.log(`✏️ Updating ticket ${existingTicket.id} for ${clientEmail}`);
+      const updateRes = await fetch(`${WAYFRONT_BASE}/tickets/${existingTicket.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${WAYFRONT_API_KEY}`,
+        },
+        body: JSON.stringify({ note: zoomNote }),
+      });
+      const updateText = await updateRes.text();
+      console.log(`📬 Update response ${updateRes.status}:`, updateText);
+      if (updateRes.ok) {
+        console.log("✅ Ticket updated successfully!");
+      } else {
+        console.error("❌ Update failed:", updateRes.status, updateText);
+      }
     } else {
-      console.error("❌ Wayfront error:", response.status, text);
+      console.log(`⚠️ No existing ticket found for ${clientEmail}`);
     }
 
     return res.status(200).json({ success: true });
