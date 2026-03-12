@@ -110,28 +110,42 @@ app.post("/webhook/zoom", async (req, res) => {
     const createRes = await fetch(`${WAYFRONT_BASE}/tickets`, {
       method: "POST",
       headers: wayfrontHeaders(),
-      body: JSON.stringify({
-        subject,
-        note,
-        user_id: userId,
-        form_data: {
-          "First Name": firstName,
-          "Last Name": lastName,
-          "Email": clientEmail,
-          "Phone": phone,
-          "Language": language,
-          "Meeting Date": startTime,
-          "Zoom Link": meetingUrl,
-        },
-      }),
+      body: JSON.stringify({ subject, note, user_id: userId }),
     });
     const createText = await createRes.text();
     console.log(`📬 Create ticket response ${createRes.status}:`, createText);
 
-    if (createRes.ok) {
-      console.log("✅ Ticket created successfully!");
-    } else {
+    if (!createRes.ok) {
       console.error("❌ Create ticket failed:", createRes.status, createText);
+      return res.status(200).json({ success: false });
+    }
+
+    // Get the ticket number from the response to attach form fields
+    const ticketData = JSON.parse(createText);
+    const ticketNumber = ticketData?.number || ticketData?.data?.number || null;
+    console.log(`✅ Ticket created! Number: ${ticketNumber}`);
+
+    // Add client info as filled form fields
+    if (ticketNumber) {
+      const fields = [
+        { name: "First Name", value: firstName },
+        { name: "Last Name", value: lastName },
+        { name: "Email", value: clientEmail },
+        { name: "Phone", value: phone },
+        { name: "Language", value: language },
+        { name: "Meeting Date", value: startTime },
+        { name: "Zoom Link", value: meetingUrl },
+      ];
+
+      for (const field of fields) {
+        if (!field.value || field.value === "N/A") continue;
+        const fdRes = await fetch(`${WAYFRONT_BASE}/form_data`, {
+          method: "POST",
+          headers: wayfrontHeaders(),
+          body: JSON.stringify({ ticket: ticketNumber, name: field.name, type: "text", value: field.value }),
+        });
+        console.log(`📋 form_data [${field.name}]: ${fdRes.status}`);
+      }
     }
 
     return res.status(200).json({ success: true });
