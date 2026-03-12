@@ -219,7 +219,7 @@ app.post("/webhook/zoom", async (req, res) => {
       const statusRes = await fetch(`${WAYFRONT_BASE}/tickets/${ticketNumber}`, {
         method: "PATCH",
         headers: wayfrontHeaders(),
-        body: JSON.stringify({ status_id: 24 }),
+        body: JSON.stringify({ status: 24 }),
       });
       const statusText = await statusRes.text();
       console.log(`🗓️ Status update: ${statusRes.status}`, statusText.substring(0, 200));
