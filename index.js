@@ -1,32 +1,35 @@
 require("dotenv").config();
 const express = require("express");
-const crypto  = require("crypto");
-const { upsertWayfrontTicket } = require("./wayfront");
+const crypto = require("crypto");
 
 const app = express();
 app.use(express.json());
 
 const {
   ZOOM_WEBHOOK_SECRET,
+  WAYFRONT_API_KEY,
   PORT = 3000,
 } = process.env;
 
-// Detect language from which Zoom booking page was used
-// Key = the ID in the booking page URL, Value = language
 const BOOKING_PAGES = {
-  "8lpnmxio": "Spanish", // trusteefriend.zoom.us/zbook/d/8lpnmxio/reuni-n-con-trusteefriend
-  "8pakjwo3": "English", // trusteefriend.zoom.us/zbook/d/8pakjwo3/meeting-with-trusteefriend
+  "8lpnmxio": "Spanish",
+  "8pakjwo3": "English",
 };
 
-app.get('/', (req, res) => res.json({ status: 'ok' }));
+// Healthcheck
+app.get("/", (req, res) => res.json({ status: "ok" }));
 
-// Zoom CRC challenge on webhook registration
+// Zoom CRC challenge
 app.get("/webhook/zoom", (req, res) => {
-  res.json({ plainToken: req.query.challenge });
+  const { challenge } = req.query;
+  res.json({ plainToken: challenge });
 });
 
-// Main webhook endpoint
+// Main webhook
 app.post("/webhook/zoom", async (req, res) => {
+  console.log("📨 Webhook received, event:", req.body?.event);
+  console.log("📦 Raw body:", JSON.stringify(req.body, null, 2));
+
   if (!verifyZoomSignature(req)) {
     console.error("❌ Invalid Zoom signature");
     return res.status(401).json({ error: "Unauthorized" });
@@ -34,7 +37,6 @@ app.post("/webhook/zoom", async (req, res) => {
 
   const { event, payload } = req.body;
 
-  // Zoom URL validation on first setup
   if (event === "endpoint.url_validation") {
     const hash = crypto
       .createHmac("sha256", ZOOM_WEBHOOK_SECRET)
@@ -44,48 +46,52 @@ app.post("/webhook/zoom", async (req, res) => {
   }
 
   if (event !== "scheduler.booking_created") {
+    console.log("⏭️ Ignoring event:", event);
     return res.status(200).json({ received: true });
   }
 
-  console.log("📅 New Zoom booking received");
+  console.log("📅 Booking event! Processing...");
 
-  const booking  = payload.object;
-  const attendee = booking.attendees?.[0] || {};
-
-  // Detect language from booking page ID in the schedule URL
+  const booking = payload?.object || payload || {};
   const scheduleId = booking.schedule_id || booking.booking_page_id || booking.id || "";
-  const language   = Object.entries(BOOKING_PAGES).find(
-    ([id]) => scheduleId.includes(id)
-  )?.[1] || "English";
+  const language = Object.entries(BOOKING_PAGES).find(([id]) => scheduleId.includes(id))?.[1] || "English";
 
-  console.log(`🌐 Language detected: ${language} (schedule: ${scheduleId})`);
+  const attendee = booking.attendees?.[0] || booking.invitee || booking;
+  const email = attendee.email || booking.email || "";
+  const firstName = attendee.first_name || booking.first_name || "";
+  const lastName = attendee.last_name || booking.last_name || "";
+  const startTime = booking.start_time || booking.start || "";
 
-  const ticketData = {
-    agentEmail: booking.registrant?.email || booking.agent_email || "",
-    client: {
-      first_name: attendee.first_name || "",
-      last_name:  attendee.last_name  || "",
-      email:      attendee.email      || "",
-      phone:      attendee.phone      || "",
-    },
-    meeting: {
-      topic:      booking.topic,
-      start_time: booking.start_time,
-      duration:   booking.duration,
-      zoom_link:  booking.join_url,
-      host:       booking.host_email || "",
-      language,
-      meeting_id: booking.id,
-    },
-  };
+  console.log(`👤 Attendee: ${firstName} ${lastName} <${email}>`);
+  console.log(`🌐 Language: ${language}`);
 
   try {
-    const result = await upsertWayfrontTicket(ticketData);
-    console.log(`✅ Ticket ${result.action}: #${result.ticket?.id}`);
-    return res.status(200).json({ success: true, ...result });
+    const subject = `Zoom Booking - ${language} - ${firstName} ${lastName}`;
+    const note = `Meeting scheduled: ${startTime}\nClient: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${attendee.phone || "N/A"}\nLanguage: ${language}`;
+
+    console.log("🎫 Creating Wayfront ticket...");
+    const response = await fetch("https://app.trusteefriend.com/api/tickets", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${WAYFRONT_API_KEY}`,
+      },
+      body: JSON.stringify({ subject, note }),
+    });
+
+    const text = await response.text();
+    console.log(`📬 Wayfront response ${response.status}:`, text);
+
+    if (response.ok) {
+      console.log("✅ Ticket created successfully!");
+    } else {
+      console.error("❌ Wayfront error:", response.status, text);
+    }
+
+    return res.status(200).json({ success: true });
   } catch (err) {
-    console.error("❌ Error:", err.message);
-    return res.status(500).json({ error: "Failed to upsert ticket" });
+    console.error("💥 Exception:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -93,8 +99,8 @@ function verifyZoomSignature(req) {
   try {
     const timestamp = req.headers["x-zm-request-timestamp"];
     const signature = req.headers["x-zm-signature"];
-    const message   = `v0:${timestamp}:${JSON.stringify(req.body)}`;
-    const hash      = "v0=" + crypto
+    const message = `v0:${timestamp}:${JSON.stringify(req.body)}`;
+    const hash = "v0=" + crypto
       .createHmac("sha256", ZOOM_WEBHOOK_SECRET)
       .update(message)
       .digest("hex");
