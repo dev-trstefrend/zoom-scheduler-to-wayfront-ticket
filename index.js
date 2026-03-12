@@ -207,6 +207,15 @@ app.post("/webhook/zoom", async (req, res) => {
         body: JSON.stringify({ message, staff_only: false }),
       });
       console.log(`💬 Message posted: ${msgRes.status}`);
+
+      // Update ticket status to "Booked for Initial Call"
+      const statusRes = await fetch(`${WAYFRONT_BASE}/tickets/${ticketNumber}`, {
+        method: "PATCH",
+        headers: wayfrontHeaders(),
+        body: JSON.stringify({ status: "Booked for Initial Call" }),
+      });
+      const statusText = await statusRes.text();
+      console.log(`🗓️ Status update: ${statusRes.status}`, statusText.substring(0, 200));
     }
 
     return res.status(200).json({ success: true });
