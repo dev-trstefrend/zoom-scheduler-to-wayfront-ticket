@@ -18,6 +18,8 @@ const BOOKING_PAGES = {
   "8pakjwo3": "English", // trusteefriend.zoom.us/zbook/d/8pakjwo3/meeting-with-trusteefriend
 };
 
+app.get('/', (req, res) => res.json({ status: 'ok' }));
+
 // Zoom CRC challenge on webhook registration
 app.get("/webhook/zoom", (req, res) => {
   res.json({ plainToken: req.query.challenge });
