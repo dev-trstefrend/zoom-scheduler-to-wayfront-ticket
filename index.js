@@ -170,25 +170,28 @@ app.post("/webhook/zoom", async (req, res) => {
     // Post confirmation message to ticket
     if (ticketNumber) {
       // Parse date, time, timezone from startTime (e.g. "2026-03-13T08:00:00-07:00")
-      let meetingDate = startTime;
+      let meetingDate = "";
       let meetingTime = "";
-      let meetingTZ = "Pacific Time";
       try {
         const dt = new Date(startTime);
-        meetingDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: timeZone });
-        meetingTime = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timeZone });
-        meetingTZ = new Intl.DateTimeFormat("en-US", { timeZoneName: "long", timeZone: timeZone }).formatToParts(dt).find(p => p.type === "timeZoneName")?.value || timeZone;
+        meetingDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "America/Los_Angeles" });
+        const pt = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" });
+        const mt = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Denver" });
+        const ct = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
+        const et = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+        const ht = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "Pacific/Honolulu" });
+        meetingTime = `${pt} PT / ${mt} MT / ${ct} CT / ${et} ET / ${ht} HT`;
       } catch {}
 
       const dateStr = meetingDate && !meetingDate.includes('Invalid') ? meetingDate : null;
-      const timeStr = meetingTime && !meetingTime.includes('Invalid') ? meetingTime + ' ' + meetingTZ : null;
+      const timeStr = meetingTime && !meetingTime.includes('Invalid') ? meetingTime : null;
       const linkStr = meetingUrl || null;
       let message = `Hello ${affiliateName},\n\nYou've successfully booked a meeting for your referral! 🎉\n\n`;
       if (dateStr) message += `📅 Date: ${dateStr}\n`;
       if (timeStr) message += `🕐 Time: ${timeStr}\n`;
       if (linkStr) message += `🔗 Zoom Link: ${linkStr}\n`;
       if (hostName) message += `\nYou'll be meeting with ${hostName}.\n`;
-      message += `\nWe look forward to speaking soon!\n`;
+      message += `\nWe look forward to speaking soon!\n `;
 
       const msgRes = await fetch(`${WAYFRONT_BASE}/ticket_messages/${ticketNumber}`, {
         method: "POST",
