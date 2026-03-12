@@ -85,6 +85,7 @@ app.post("/webhook/zoom", async (req, res) => {
   try {
     // Look up affiliate's Wayfront user_id by email
     let userId = null;
+    let affiliateName = "Affiliate";
     if (affiliateEmail) {
       console.log(`🔍 Looking up Wayfront user for: ${affiliateEmail}`);
       const teamRes = await fetch(
@@ -92,9 +93,11 @@ app.post("/webhook/zoom", async (req, res) => {
         { headers: wayfrontHeaders() }
       );
       const teamData = await teamRes.json();
-      console.log(`👥 Team lookup response:`, JSON.stringify(teamData).substring(0, 300));
-      userId = teamData?.data?.[0]?.id || null;
-      console.log(`🆔 Found user_id: ${userId}`);
+      console.log(`👥 Client lookup response:`, JSON.stringify(teamData).substring(0, 300));
+      const affiliateRecord = teamData?.data?.[0];
+      userId = affiliateRecord?.id || null;
+      affiliateName = affiliateRecord?.name_f || affiliateRecord?.name || "Affiliate";
+      console.log(`🆔 Found user_id: ${userId}, name: ${affiliateName}`);
     }
 
     if (!userId) {
@@ -146,6 +149,29 @@ app.post("/webhook/zoom", async (req, res) => {
         });
         console.log(`📋 form_data [${field.name}]: ${fdRes.status}`);
       }
+    }
+
+    // Post confirmation message to ticket
+    if (ticketNumber) {
+      // Parse date, time, timezone from startTime (e.g. "2026-03-13T08:00:00-07:00")
+      let meetingDate = startTime;
+      let meetingTime = "";
+      let meetingTZ = "Pacific Time";
+      try {
+        const dt = new Date(startTime);
+        meetingDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "America/Los_Angeles" });
+        meetingTime = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" });
+        meetingTZ = "Pacific Time (PT)";
+      } catch {}
+
+      const message = `Hello ${affiliateName},\n\nYou've successfully booked a meeting for your referral! 🎉\n\n📅 **Date:** ${meetingDate}\n\n🕐 **Time:** ${meetingTime} ${meetingTZ}\n\n🔗 **Zoom Link:** ${meetingUrl}\n\nWe look forward to speaking soon!\n\n*Sincerely,*\n\n*TrusteeFriend Team*`;
+
+      const msgRes = await fetch(`${WAYFRONT_BASE}/ticket_messages/${ticketNumber}`, {
+        method: "POST",
+        headers: wayfrontHeaders(),
+        body: JSON.stringify({ message, staff_only: false }),
+      });
+      console.log(`💬 Message posted: ${msgRes.status}`);
     }
 
     return res.status(200).json({ success: true });
