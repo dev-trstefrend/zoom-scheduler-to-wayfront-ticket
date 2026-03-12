@@ -208,11 +208,18 @@ app.post("/webhook/zoom", async (req, res) => {
       });
       console.log(`💬 Message posted: ${msgRes.status}`);
 
+      // Fetch available statuses to find the correct integer ID
+      const statusListRes = await fetch(`${WAYFRONT_BASE}/ticket_statuses`, {
+        headers: wayfrontHeaders(),
+      });
+      const statusListText = await statusListRes.text();
+      console.log(`📋 Ticket statuses: ${statusListText.substring(0, 500)}`);
+
       // Update ticket status to "Booked for Initial Call"
       const statusRes = await fetch(`${WAYFRONT_BASE}/tickets/${ticketNumber}`, {
         method: "PATCH",
         headers: wayfrontHeaders(),
-        body: JSON.stringify({ status: "Booked for Initial Call" }),
+        body: JSON.stringify({ status_id: 24 }),
       });
       const statusText = await statusRes.text();
       console.log(`🗓️ Status update: ${statusRes.status}`, statusText.substring(0, 200));
