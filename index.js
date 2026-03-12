@@ -90,6 +90,7 @@ app.post("/webhook/zoom", async (req, res) => {
     q.question === "¿Cual es tu correo electrónico, agente afiliado?"
   )?.answer?.[0] || "";
 
+  console.log(`📦 Full booking object:`, JSON.stringify(booking));
   console.log(`👤 Client: ${firstName} ${lastName} <${clientEmail}>`);
   console.log(`🌐 Language: ${language}`);
   console.log(`🤝 Affiliate email: ${affiliateEmail}`);
