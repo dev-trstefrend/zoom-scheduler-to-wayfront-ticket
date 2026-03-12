@@ -13,7 +13,7 @@ const {
 
 const BOOKING_PAGES = {
   "8lpnmxio": "Spanish",
-  "8pakjwo3": "English",
+  "muu3-3f4": "English",
 };
 
 
@@ -71,8 +71,13 @@ app.post("/webhook/zoom", async (req, res) => {
   console.log("📅 Booking event! Processing...");
 
   const booking = payload?.object || payload || {};
-  const eventId = booking.event_id || "";
-  const language = Object.entries(BOOKING_PAGES).find(([id]) => eventId.includes(id))?.[1] || "English";
+  const eventId = booking.scheduled_event?.event_id || booking.event_id || "";
+  const matchedPage = Object.entries(BOOKING_PAGES).find(([id]) => eventId.includes(id));
+  if (!matchedPage) {
+    console.log("⏭️ Ignoring booking from unregistered page:", eventId);
+    return res.status(200).json({ received: true });
+  }
+  const language = matchedPage[1];
 
   const clientEmail = booking.invitee_email || "";
   const firstName = booking.invitee_first_name || "";
