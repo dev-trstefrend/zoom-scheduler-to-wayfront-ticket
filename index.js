@@ -103,7 +103,7 @@ app.post("/webhook/zoom", async (req, res) => {
     }
 
     // Create ticket assigned to affiliate
-    const subject = `Zoom Booking - ${language} - ${firstName} ${lastName}`;
+    const subject = `Referral for ${firstName} ${lastName}`;
     const note = `📅 Zoom Meeting Booked!\nDate: ${startTime}\nClient: ${firstName} ${lastName}\nEmail: ${clientEmail}\nPhone: ${phone}\nLanguage: ${language}\nJoin URL: ${meetingUrl}\nMeeting ID: ${meetingId}`;
 
     console.log(`🎫 Creating ticket for user_id ${userId}...`);
