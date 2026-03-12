@@ -164,7 +164,14 @@ app.post("/webhook/zoom", async (req, res) => {
         meetingTZ = "Pacific Time (PT)";
       } catch {}
 
-      const message = `Hello ${affiliateName},\n\nYou've successfully booked a meeting for your referral! 🎉\n\n📅 **Date:** ${meetingDate}\n\n🕐 **Time:** ${meetingTime} ${meetingTZ}\n\n🔗 **Zoom Link:** ${meetingUrl}\n\nWe look forward to speaking soon!\n\n*Sincerely,*\n\n*TrusteeFriend Team*`;
+      const dateStr = meetingDate && !meetingDate.includes('Invalid') ? meetingDate : null;
+      const timeStr = meetingTime && !meetingTime.includes('Invalid') ? meetingTime + ' ' + meetingTZ : null;
+      const linkStr = meetingUrl || null;
+      let message = `Hello ${affiliateName},\n\nYou've successfully booked a meeting for your referral! 🎉\n\n`;
+      if (dateStr) message += `📅 Date: ${dateStr}\n`;
+      if (timeStr) message += `🕐 Time: ${timeStr}\n`;
+      if (linkStr) message += `🔗 Zoom Link: ${linkStr}\n`;
+      message += `\nWe look forward to speaking soon!\n\nSincerely,\nTrusteeFriend Team`;
 
       const msgRes = await fetch(`${WAYFRONT_BASE}/ticket_messages/${ticketNumber}`, {
         method: "POST",
