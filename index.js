@@ -11,12 +11,11 @@ const {
   PORT = 3000,
 } = process.env;
 
-// Staff map — update with real Zoom host emails
-const STAFF = {
-  "maria@trusteefriend.com":  { language: "es", name: "Maria González" },
-  "carlos@trusteefriend.com": { language: "es", name: "Carlos Rivera" },
-  "john@trusteefriend.com":   { language: "en", name: "John Smith" },
-  "sarah@trusteefriend.com":  { language: "en", name: "Sarah Lee" },
+// Detect language from which Zoom booking page was used
+// Key = the ID in the booking page URL, Value = language
+const BOOKING_PAGES = {
+  "8lpnmxio": "Spanish", // trusteefriend.zoom.us/zbook/d/8lpnmxio/reuni-n-con-trusteefriend
+  "8pakjwo3": "English", // trusteefriend.zoom.us/zbook/d/8pakjwo3/meeting-with-trusteefriend
 };
 
 // Zoom CRC challenge on webhook registration
@@ -27,6 +26,7 @@ app.get("/webhook/zoom", (req, res) => {
 // Main webhook endpoint
 app.post("/webhook/zoom", async (req, res) => {
   if (!verifyZoomSignature(req)) {
+    console.error("❌ Invalid Zoom signature");
     return res.status(401).json({ error: "Unauthorized" });
   }
 
@@ -45,9 +45,18 @@ app.post("/webhook/zoom", async (req, res) => {
     return res.status(200).json({ received: true });
   }
 
-  const booking   = payload.object;
-  const attendee  = booking.attendees?.[0] || {};
-  const staff     = STAFF[booking.host_email] || {};
+  console.log("📅 New Zoom booking received");
+
+  const booking  = payload.object;
+  const attendee = booking.attendees?.[0] || {};
+
+  // Detect language from booking page ID in the schedule URL
+  const scheduleId = booking.schedule_id || booking.booking_page_id || booking.id || "";
+  const language   = Object.entries(BOOKING_PAGES).find(
+    ([id]) => scheduleId.includes(id)
+  )?.[1] || "English";
+
+  console.log(`🌐 Language detected: ${language} (schedule: ${scheduleId})`);
 
   const ticketData = {
     agentEmail: booking.registrant?.email || booking.agent_email || "",
@@ -62,8 +71,8 @@ app.post("/webhook/zoom", async (req, res) => {
       start_time: booking.start_time,
       duration:   booking.duration,
       zoom_link:  booking.join_url,
-      host:       staff.name || booking.host_email,
-      language:   staff.language === "es" ? "Spanish" : "English",
+      host:       booking.host_email || "",
+      language,
       meeting_id: booking.id,
     },
   };
