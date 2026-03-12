@@ -76,7 +76,7 @@ app.post("/webhook/zoom", async (req, res) => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${WAYFRONT_API_KEY}`,
       },
-      body: JSON.stringify({ subject, note }),
+      body: JSON.stringify({ subject, note, user_id: 3101 }),
     });
 
     const text = await response.text();
