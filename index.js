@@ -18,6 +18,13 @@ const BOOKING_PAGES = {
 
 const WAYFRONT_BASE = "https://app.trusteefriend.com/api";
 
+function wayfrontHeaders() {
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${WAYFRONT_API_KEY}`,
+  };
+}
+
 // Healthcheck
 app.get("/", (req, res) => res.json({ status: "ok" }));
 
@@ -62,47 +69,60 @@ app.post("/webhook/zoom", async (req, res) => {
   const lastName = booking.invitee_last_name || "";
   const startTime = booking.start_date_time || "";
   const meetingUrl = booking.meeting_join_url || "";
-  const phone = (booking.questions_and_answers || []).find(q => q.question === "Phone Number")?.["answer"]?.[0] || "N/A";
+  const meetingId = booking.meeting_id || "";
+
+  const qas = booking.questions_and_answers || [];
+  const phone = qas.find(q => q.question === "Phone Number")?.answer?.[0] || "N/A";
+  const affiliateEmail = qas.find(q =>
+    q.question === "What is your email, agent affiliate?" ||
+    q.question === "¿Cual es tu correo electrónico, agente afiliado?"
+  )?.answer?.[0] || "";
 
   console.log(`👤 Client: ${firstName} ${lastName} <${clientEmail}>`);
   console.log(`🌐 Language: ${language}`);
+  console.log(`🤝 Affiliate email: ${affiliateEmail}`);
 
   try {
-    // Search for existing ticket by client email in form_data
-    console.log(`🔍 Searching for ticket with client email: ${clientEmail}`);
-    const searchUrl = `${WAYFRONT_BASE}/tickets?filters[form_data.Email][$eq][]=${encodeURIComponent(clientEmail)}`;
-    const searchRes = await fetch(searchUrl, {
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${WAYFRONT_API_KEY}`,
-      }
+    // Look up affiliate's Wayfront user_id by email
+    let userId = null;
+    if (affiliateEmail) {
+      console.log(`🔍 Looking up Wayfront user for: ${affiliateEmail}`);
+      const teamRes = await fetch(
+        `${WAYFRONT_BASE}/team?filters[email][$eq][]=${encodeURIComponent(affiliateEmail)}`,
+        { headers: wayfrontHeaders() }
+      );
+      const teamData = await teamRes.json();
+      console.log(`👥 Team lookup response:`, JSON.stringify(teamData).substring(0, 300));
+      userId = teamData?.data?.[0]?.id || null;
+      console.log(`🆔 Found user_id: ${userId}`);
+    }
+
+    if (!userId) {
+      console.error("❌ Could not find Wayfront user for affiliate email:", affiliateEmail);
+      return res.status(200).json({ success: false, reason: "affiliate not found" });
+    }
+
+    // Create ticket assigned to affiliate
+    const subject = `Zoom Booking - ${language} - ${firstName} ${lastName}`;
+    const note = `📅 Zoom Meeting Booked!\nDate: ${startTime}\nClient: ${firstName} ${lastName}\nEmail: ${clientEmail}\nPhone: ${phone}\nLanguage: ${language}\nJoin URL: ${meetingUrl}\nMeeting ID: ${meetingId}`;
+
+    console.log(`🎫 Creating ticket for user_id ${userId}...`);
+    const createRes = await fetch(`${WAYFRONT_BASE}/tickets`, {
+      method: "POST",
+      headers: wayfrontHeaders(),
+      body: JSON.stringify({
+        subject,
+        note,
+        user_id: userId,
+      }),
     });
-    const searchData = await searchRes.json();
-    console.log(`🔍 Search result: ${searchData?.data?.length || 0} tickets found`);
+    const createText = await createRes.text();
+    console.log(`📬 Create ticket response ${createRes.status}:`, createText);
 
-    const existingTicket = searchData?.data?.[0];
-
-    const zoomNote = `📅 Zoom Meeting Booked!\nDate: ${startTime}\nClient: ${firstName} ${lastName}\nEmail: ${clientEmail}\nPhone: ${phone}\nLanguage: ${language}\nJoin URL: ${meetingUrl}`;
-
-    if (existingTicket) {
-      console.log(`✏️ Updating ticket ${existingTicket.id} for ${clientEmail}`);
-      const updateRes = await fetch(`${WAYFRONT_BASE}/tickets/${existingTicket.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${WAYFRONT_API_KEY}`,
-        },
-        body: JSON.stringify({ note: zoomNote }),
-      });
-      const updateText = await updateRes.text();
-      console.log(`📬 Update response ${updateRes.status}:`, updateText);
-      if (updateRes.ok) {
-        console.log("✅ Ticket updated successfully!");
-      } else {
-        console.error("❌ Update failed:", updateRes.status, updateText);
-      }
+    if (createRes.ok) {
+      console.log("✅ Ticket created successfully!");
     } else {
-      console.log(`⚠️ No existing ticket found for ${clientEmail}`);
+      console.error("❌ Create ticket failed:", createRes.status, createText);
     }
 
     return res.status(200).json({ success: true });
