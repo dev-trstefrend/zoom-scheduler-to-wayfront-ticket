@@ -171,7 +171,7 @@ app.post("/webhook/zoom", async (req, res) => {
       if (dateStr) message += `📅 Date: ${dateStr}\n`;
       if (timeStr) message += `🕐 Time: ${timeStr}\n`;
       if (linkStr) message += `🔗 Zoom Link: ${linkStr}\n`;
-      message += `\nWe look forward to speaking soon!\n\nSincerely,\nTrusteeFriend Team`;
+      message += `\nWe look forward to speaking soon!`;
 
       const msgRes = await fetch(`${WAYFRONT_BASE}/ticket_messages/${ticketNumber}`, {
         method: "POST",
