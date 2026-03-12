@@ -177,7 +177,7 @@ app.post("/webhook/zoom", async (req, res) => {
         const dt = new Date(startTime);
         meetingDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: timeZone });
         meetingTime = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timeZone });
-        meetingTZ = timeZone.replace("America/", "").replace("_", " ") + " Time";
+        meetingTZ = new Intl.DateTimeFormat("en-US", { timeZoneName: "long", timeZone: timeZone }).formatToParts(dt).find(p => p.type === "timeZoneName")?.value || timeZone;
       } catch {}
 
       const dateStr = meetingDate && !meetingDate.includes('Invalid') ? meetingDate : null;
@@ -188,7 +188,7 @@ app.post("/webhook/zoom", async (req, res) => {
       if (timeStr) message += `🕐 Time: ${timeStr}\n`;
       if (linkStr) message += `🔗 Zoom Link: ${linkStr}\n`;
       if (hostName) message += `\nYou'll be meeting with ${hostName}.\n`;
-      message += `\nWe look forward to speaking soon!`;
+      message += `\nWe look forward to speaking soon!\n`;
 
       const msgRes = await fetch(`${WAYFRONT_BASE}/ticket_messages/${ticketNumber}`, {
         method: "POST",
