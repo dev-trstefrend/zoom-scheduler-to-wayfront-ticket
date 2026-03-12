@@ -16,6 +16,16 @@ const BOOKING_PAGES = {
   "8pakjwo3": "English",
 };
 
+
+const HOST_PMI_LINKS = {
+  'Alex Ramirez': 'https://trusteefriend.zoom.us/j/7142537721',
+  'Lisa Bui': 'https://trusteefriend.zoom.us/j/5313786112',
+  'Stephanie Clark': 'https://trusteefriend.zoom.us/j/7026702109',
+  'Amell Martinez': 'https://trusteefriend.zoom.us/j/8422731668',
+  'Barry Kozak': 'https://trusteefriend.zoom.us/j/8011171543',
+  'Daniel Quijano': 'https://trusteefriend.zoom.us/j/9495422142',
+};
+
 const WAYFRONT_BASE = "https://app.trusteefriend.com/api";
 
 function wayfrontHeaders() {
@@ -68,7 +78,9 @@ app.post("/webhook/zoom", async (req, res) => {
   const firstName = booking.invitee_first_name || "";
   const lastName = booking.invitee_last_name || "";
   const startTime = booking.start_date_time || "";
-  const meetingUrl = booking.meeting_join_url || "";
+  const hostName = booking.host_name || "";
+  const meetingUrl = booking.meeting_join_url || HOST_PMI_LINKS[hostName] || "";
+  console.log(`🔗 Meeting URL: ${meetingUrl} (host: ${hostName})`);
   const meetingId = booking.meeting_id || "";
 
   const qas = booking.questions_and_answers || [];
