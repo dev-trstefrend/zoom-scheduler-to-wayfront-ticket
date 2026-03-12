@@ -122,7 +122,7 @@ app.post("/webhook/zoom", async (req, res) => {
 
     // Get the ticket number from the response to attach form fields
     const ticketData = JSON.parse(createText);
-    const ticketNumber = ticketData?.number || ticketData?.data?.number || null;
+    const ticketNumber = ticketData?.number || ticketData?.id || ticketData?.data?.number || ticketData?.data?.id || null;
     console.log(`✅ Ticket created! Number: ${ticketNumber}`);
 
     // Add client info as filled form fields
