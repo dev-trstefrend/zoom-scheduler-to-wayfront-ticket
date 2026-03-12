@@ -71,13 +71,16 @@ app.post("/webhook/zoom", async (req, res) => {
   console.log("📅 Booking event! Processing...");
 
   const booking = payload?.object || payload || {};
-  const eventId = booking.scheduled_event?.event_id || booking.event_id || "";
-  const matchedPage = Object.entries(BOOKING_PAGES).find(([id]) => eventId.includes(id));
-  if (!matchedPage) {
-    console.log("⏭️ Ignoring booking from unregistered page:", eventId);
+
+  // Filter: only process bookings from our two pages (identified by affiliate question text)
+  const qasCheck = booking.questions_and_answers || [];
+  const isEnglish = qasCheck.some(q => q.question === "What is your email, agent affiliate?");
+  const isSpanish = qasCheck.some(q => q.question === "¿Cual es tu correo electrónico, agente afiliado?");
+  if (!isEnglish && !isSpanish) {
+    console.log("⏭️ Not a TrusteeFriend booking page, ignoring.");
     return res.status(200).json({ received: true });
   }
-  const language = matchedPage[1];
+  const language = isSpanish ? "Spanish" : "English";
 
   const clientEmail = booking.invitee_email || "";
   const firstName = booking.invitee_first_name || "";
